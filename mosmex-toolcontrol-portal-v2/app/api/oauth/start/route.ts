@@ -27,11 +27,21 @@ export async function GET(req: NextRequest) {
   let redirect: URL;
   try { redirect = new URL(returnTo); }
   catch { return NextResponse.json({ error: 'URL de retorno inválida.' }, { status: 400 }); }
-  if (redirect.protocol !== 'http:' || redirect.hostname !== '127.0.0.1' ||
-      !/^[0-9]{1,5}$/.test(redirect.port) || !(Number(redirect.port) > 1023 && Number(redirect.port) <= 65535) ||
-      redirect.pathname !== '/oauth/callback' || redirect.username || redirect.password ||
-      redirect.search || redirect.hash) {
-    return NextResponse.json({ error: 'Solo se acepta 127.0.0.1 y callback local autorizado.' }, { status: 400 });
+  const checks = {
+    http: redirect.protocol === 'http:',
+    loopback: ['127.0.0.1', 'localhost', '[::1]'].includes(redirect.hostname.toLowerCase()),
+    port: !!redirect.port && /^[0-9]{2,5}$/.test(redirect.port) &&
+          Number(redirect.port) >= 1024 && Number(redirect.port) <= 65535,
+    callback: ['/oauth/callback', '/oauth/callback/'].includes(redirect.pathname),
+    clean: !redirect.username && !redirect.password && !redirect.search && !redirect.hash,
+  };
+  if (!Object.values(checks).every(Boolean)) {
+    // Only booleans: never echo OAuth state, PKCE, code, client ID, or raw callback.
+    return NextResponse.json({
+      error: 'El retorno OAuth debe apuntar al servidor local de ToolControl.',
+      checks,
+      recommendation: 'Utilice Google directo (alternativa) en ToolControl v0.14.54.1.',
+    }, {status: 400, headers: {'Cache-Control': 'no-store'}});
   }
 
   const google = new URL('https://accounts.google.com/o/oauth2/v2/auth');
