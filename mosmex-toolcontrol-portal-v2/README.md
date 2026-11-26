@@ -1,26 +1,38 @@
-# MOSMEX ToolControl OAuth Portal v0.14.54
+# MOSMEX ToolControl — PIN OAuth v0.14.55
 
-A standalone Vercel project built from the **mosmex-toolcontrol-portal-v2** subfolder of the GitHub **Hacktex24/drive-login** repository.
+This is a **standalone Vercel project** within the Hacktex24/drive-login GitHub repository. The PlayDrive/Kodi production app is untouched.
 
-## Purpose
-- Starts Google Desktop OAuth2 Authorization Code + PKCE for ToolControl.
-- Only accepts an ephemeral loopback callback on \`http://127.0.0.1:<port>/oauth/callback\`.
-- Does NOT receive or store OAuth authorization codes, refresh tokens, MOSMEX passwords, SQLite databases or inventory files.
-- ToolControl uploads encrypted/versioned full backups **directly** using the Google Drive API (\`drive.file\`).
-- LAN/OEE syncing remains operational without this website.
+## No technical settings on desktops
+1. Open ToolControl v0.14.55 > Configuración > Google Drive > Vincular Google Drive (PIN).
+2. ToolControl shows a temporary 12-character code (10-minute validity).
+3. On a phone visit https://mosmex-toolcontrol-oauth-brian-56ae.vercel.app/vincular.
+4. Enter PIN, grant Google Drive permissions, return to ToolControl.
+5. Desktop automatically saves encrypted authorization in the MOSMEX user vault and creates the private backup folder.
 
-## Deployment
-1. Create a dedicated Vercel project \`mosmex-toolcontrol-oauth\` connected to the repository.
-2. Set the project Root Directory to \`mosmex-toolcontrol-portal-v2\`.
-3. Deploy the \`mosmex-toolcontrol-drive-v01454\` Git branch as a preview. Do NOT change the existing Kodi/PlayDrive production deployment.
-4. No Vercel secret is necessary. The desktop app supplies its **public** Desktop OAuth Client ID to the portal. For single-client restriction you may set \`MOSMEX_GOOGLE_DESKTOP_CLIENT_ID\` to that public ID in Vercel.
-5. In Google Cloud, enable Google Drive API and create OAuth 2.0 credentials of type **Desktop app**. Publish the consent screen appropriately. Users must be test users if the OAuth consent screen remains in Testing.
-6. In ToolControl v0.14.54: Configuración > Google Drive. Paste Google Desktop OAuth Client ID and the Vercel HTTPS deployment URL. If Google Cloud supplies a desktop client secret, enter it in ToolControl (encrypted locally), **never in GitHub**.
-7. Press Vincular cuenta Google, create the Drive folder, then perform a full encrypted backup.
+## One-time administrator setup (not repeated by users)
+- Google Cloud project: mosmex-toolcontrol (Google Drive API enabled).
+- In Google Auth Platform create an OAuth **Web application** client. The previous Desktop client does not support the web callback.
+- Set its Authorized redirect URI exactly:
+  https://mosmex-toolcontrol-oauth-brian-56ae.vercel.app/api/oauth/callback
+- In Vercel project mosmex-toolcontrol-oauth, set environment variables:
+  MOSMEX_GOOGLE_WEB_CLIENT_ID (public Web client ID)
+  MOSMEX_GOOGLE_WEB_CLIENT_SECRET (Google Web client secret; encrypted / sensitive)
+- Private Vercel Blob store: mosmex-toolcontrol-pairing, linked to this Vercel project.
+- Redeploy Vercel production after saving variables.
+- Health endpoint: /api/health must return status "ready".
+- While Google OAuth is in Testing mode, only configured test users can authorize and refresh tokens generally expire after 7 days.
 
-## Not yet enabled
-- Automatic multiplant inventory merge / authoritative master table.
-- Automatic account directory propagation, vault onboarding on a brand-new PC, and immediate multi-PC revocation.
-- Automatic restores. Restoring a remote FULL ZIP is an explicit, confirmation-gated desktop operation.
+## Security details
+- PIN: 12 random base32 characters (~60 bits of entropy), expires after 10 minutes.
+- Private Blob stores one-day-expiring session objects; PIN lookup uses a hash, not plaintext.
+- 256-bit random polling secret; independent ephemeral X25519 recipient key on Windows.
+- Backend exchanges the Google OAuth authorization code with PKCE and Web OAuth client credentials.
+- Temporary access/refresh token grant is sealed to the PC with AES-256-GCM + ECDH/HKDF.
+- Only encrypted grant is stored in Blob before pickup; after ACK, entries are deleted.
+- Browser never gets the desktop polling secret or Google refresh tokens.
+- The Web OAuth secret never leaves Vercel and is never packaged in the Windows application.
+- Token renewal goes via the Vercel refresh endpoint using a server-HMAC refresh ticket.
+- Inventories, certificates and MOSMEX passwords are never sent to Vercel; Drive backup archives are encrypted locally and uploaded directly to Google Drive.
 
-Never upload private keys, .env secrets, OAuth tokens, user vaults, certificates or plant inventory to GitHub. Production enterprise usage is subject to company IT approval and Vercel plan terms.
+## Operational limitations
+This is a PILOT. It does not yet provide synchronized account directories across computers, continuous remote revocation, simultaneous inventory merges, or automated per-plant state conflict resolution. Live Google Web OAuth and Windows integration require verification before plant deployment.
