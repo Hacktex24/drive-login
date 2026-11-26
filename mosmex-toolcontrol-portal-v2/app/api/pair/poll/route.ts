@@ -1,8 +1,9 @@
 import { NextRequest,NextResponse } from 'next/server';
-import {deviceKey,resultKey,smallJSON,redis,noCache} from '../../../../lib/pin-core';
+import {deviceKey,resultKey,smallJSON,redis,noCache,throttle} from '../../../../lib/pin-core';
 export const runtime='nodejs';export const dynamic='force-dynamic';
 export async function POST(req:NextRequest){
   try{
+    await throttle(req,'poll',300);
     const {device_code}=await smallJSON(req,1024);
     if(typeof device_code!=='string'||!/^[A-Za-z0-9_-]{43}$/.test(device_code))
       return NextResponse.json({error:'Código de dispositivo inválido.'},{status:400,headers:noCache});
